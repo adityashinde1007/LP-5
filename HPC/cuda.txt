@@ -1,0 +1,95 @@
+#include <cstdlib>
+#include <iostream>
+
+
+# using namespace std;
+
+# // VectorAdd parallel function
+_global_ void vectorAdd(int *a, int *b, int *result, int n) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if (tid < n) {
+        result[tid] = a[tid] + b[tid];
+    }
+}
+
+int main() {
+    int *a, *b, *c;
+    int *a_dev, *b_dev, *c_dev;
+    int n = 1 << 4;
+
+    a = new int[n];
+    b = new int[n];
+    c = new int[n];
+    int *d = new int[n];
+    int size = n * sizeof(int);
+    cudaMalloc(&a_dev, size);
+    cudaMalloc(&b_dev, size);
+    cudaMalloc(&c_dev, size);
+
+    # // Array initialization..You can use Randon function to assign values
+    for (int i = 0; i < n; i++) {
+        a[i] = rand() % 1000;
+        b[i] = rand() % 1000;
+        d[i] = a[i] + b[i];  #// calculating serial addition
+    }
+    cout << "Given array A is =>\n";
+    for (int i = 0; i < n; i++) {
+        cout << a[i] << ", ";
+    }
+    cout << "\n\n";
+
+    cout << "Given array B is =>\n";
+    for (int i = 0; i < n; i++) {
+        cout << b[i] << ", ";
+    }
+    cout << "\n\n";
+
+    cudaEvent_t start, end;
+
+    cudaEventCreate(&start);
+    cudaEventCreate(&end);
+
+    cudaMemcpy(a_dev, a, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(b_dev, b, size, cudaMemcpyHostToDevice);
+    int threads = 1024;
+    int blocks = (n + threads - 1) / threads;
+    cudaEventRecord(start);
+
+    # // Parallel addition program
+    vectorAdd<<<blocks, threads>>>(a_dev, b_dev, c_dev, n);
+
+    cudaEventRecord(end);
+    cudaEventSynchronize(end);
+
+    float time = 0.0;
+    cudaEventElapsedTime(&time, start, end);
+
+    cudaMemcpy(c, c_dev, size, cudaMemcpyDeviceToHost);
+
+    # // Calculate the error term.
+
+    cout << "CPU sum is =>\n";
+    for (int i = 0; i < n; i++) {
+        cout << d[i] << ", ";
+    }
+    cout << "\n\n";
+
+    cout << "GPU sum is =>\n";
+    for (int i = 0; i < n; i++) {
+        cout << c[i] << ", ";
+    }
+    cout << "\n\n";
+
+    int error = 0;
+    for (int i = 0; i < n; i++) {
+        error += d[i] - c[i];
+        if (0 != (d[i] - c[i])) {
+            cout << "Error at (" << i << ") => GPU: " << c[i] << ", CPU: " << d[i] << "\n";
+        }
+    }
+
+    cout << "\nError : " << error;
+    cout << "\nTime Elapsed: " << time;
+
+    return 0;
+}
